@@ -7,6 +7,7 @@ const configuration = {
 };
 let videoEnabled = true;
 let audioEnabled = true;
+let audioAnalysers = {};
 
 async function startMedia() {
   try {
@@ -14,26 +15,74 @@ async function startMedia() {
       video: true,
       audio: true,
     });
-    const videoContainer = document.createElement("div");
-    videoContainer.className = "video-container";
-    videoContainer.id = `video-${socket.id}`;
-
-    const video = document.createElement("video");
+    const videoContainer = createVideoContainer(
+      socket.id,
+      document.getElementById("user-name").value.trim()
+    );
+    const video = videoContainer.querySelector("video");
     video.srcObject = localStream;
     video.muted = true; // Tắt tiếng local để tránh echo
     video.play();
-
-    const label = document.createElement("span");
-    label.className = "video-label";
-    label.textContent = document.getElementById("user-name").value.trim();
-
-    videoContainer.appendChild(video);
-    videoContainer.appendChild(label);
     document.getElementById("video-grid").appendChild(videoContainer);
+
+    // Phân tích âm thanh local
+    setupAudioAnalyser(socket.id, localStream);
   } catch (err) {
     console.error("Error accessing media devices:", err);
     alert("Could not access camera/microphone. Please check permissions.");
   }
+}
+
+function createVideoContainer(userId, userName) {
+  const videoContainer = document.createElement("div");
+  videoContainer.className = "video-container";
+  videoContainer.id = `video-${userId}`;
+
+  const video = document.createElement("video");
+  videoContainer.appendChild(video);
+
+  const label = document.createElement("span");
+  label.className = "video-label";
+  label.textContent = userName;
+  videoContainer.appendChild(label);
+
+  const waveform = document.createElement("div");
+  waveform.className = "waveform";
+  for (let i = 0; i < 4; i++) {
+    const bar = document.createElement("div");
+    bar.className = "wave-bar";
+    waveform.appendChild(bar);
+  }
+  videoContainer.appendChild(waveform);
+
+  return videoContainer;
+}
+
+function setupAudioAnalyser(userId, stream) {
+  const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+  const analyser = audioContext.createAnalyser();
+  analyser.fftSize = 256;
+  const source = audioContext.createMediaStreamSource(stream);
+  source.connect(analyser);
+
+  audioAnalysers[userId] = { analyser, audioContext };
+
+  const dataArray = new Uint8Array(analyser.frequencyBinCount);
+  function updateWaveform() {
+    analyser.getByteFrequencyData(dataArray);
+    const average = dataArray.reduce((a, b) => a + b) / dataArray.length;
+    const waveform = document.querySelector(`#video-${userId} .waveform`);
+    if (waveform) {
+      if (average > 10) {
+        // Ngưỡng để kích hoạt sóng âm
+        waveform.classList.add("active");
+      } else {
+        waveform.classList.remove("active");
+      }
+    }
+    requestAnimationFrame(updateWaveform);
+  }
+  updateWaveform();
 }
 
 function createRoom() {
@@ -65,6 +114,10 @@ function leaveRoom() {
   }
   document.getElementById("video-grid").innerHTML = "";
   document.getElementById("chat-messages").innerHTML = "";
+  for (let userId in audioAnalysers) {
+    audioAnalysers[userId].audioContext.close();
+    delete audioAnalysers[userId];
+  }
   for (let peerId in peers) {
     peers[peerId].close();
     delete peers[peerId];
@@ -93,9 +146,9 @@ function toggleAudio() {
 
 function sendMessage() {
   const input = document.getElementById("chat-input");
-  const сообщение = input.value.trim();
-  if (сообщение && roomId) {
-    socket.emit("sendMessage", сообщение);
+  const message = input.value.trim();
+  if (message && roomId) {
+    socket.emit("sendMessage", message);
     input.value = "";
   }
 }
@@ -156,21 +209,18 @@ function createPeerConnection(userId, isOfferer) {
   localStream.getTracks().forEach((track) => peer.addTrack(track, localStream));
 
   peer.ontrack = (event) => {
-    const videoContainer = document.createElement("div");
-    videoContainer.className = "video-container";
-    videoContainer.id = `video-${userId}`;
-
-    const video = document.createElement("video");
-    video.srcObject = event.streams[0];
-    video.play();
-
-    const label = document.createElement("span");
-    label.className = "video-label";
-    label.textContent = peers[userId].userName || "Unknown"; // Lấy tên từ server
-
-    videoContainer.appendChild(video);
-    videoContainer.appendChild(label);
-    document.getElementById("video-grid").appendChild(videoContainer);
+    const existingContainer = document.getElementById(`video-${userId}`);
+    if (!existingContainer) {
+      const videoContainer = createVideoContainer(
+        userId,
+        peers[userId].userName
+      );
+      const video = videoContainer.querySelector("video");
+      video.srcObject = event.streams[0];
+      video.play();
+      document.getElementById("video-grid").appendChild(videoContainer);
+      setupAudioAnalyser(userId, event.streams[0]);
+    }
   };
 
   peer.onicecandidate = (event) => {
@@ -190,11 +240,14 @@ function createPeerConnection(userId, isOfferer) {
     if (peer.connectionState === "disconnected") {
       const videoContainer = document.getElementById(`video-${userId}`);
       if (videoContainer) videoContainer.remove();
+      if (audioAnalysers[userId]) {
+        audioAnalysers[userId].audioContext.close();
+        delete audioAnalysers[userId];
+      }
       delete peers[userId];
     }
   };
 
-  // Lưu tên người dùng vào peer để hiển thị
   peer.userName =
     Object.values(peers[userId]?.users || {}).find((u) => u.socketId === userId)
       ?.name || "Unknown";
@@ -223,7 +276,6 @@ function updateUserList(users) {
     .join(", ");
   document.getElementById("user-list").textContent = userList;
 
-  // Cập nhật tên cho các peer hiện có
   for (let userId in peers) {
     peers[userId].userName = users[userId]?.name || "Unknown";
     const label = document.querySelector(`#video-${userId} .video-label`);
