@@ -29,8 +29,22 @@
       <p>Users in room: <span id="user-list" class="user-list"></span></p>
       <div class="button-group">
         <button onclick="leaveRoom()" class="btn danger">Leave Room</button>
+        <button id="toggle-video" onclick="toggleVideo()" class="btn secondary">
+          Turn Off Video
+        </button>
+        <button id="toggle-audio" onclick="toggleAudio()" class="btn secondary">
+          Mute Audio
+        </button>
       </div>
       <div id="video-grid" class="video-grid"></div>
+      <div class="chat-container">
+        <h3>Chat</h3>
+        <div id="chat-messages" class="chat-messages"></div>
+        <div class="chat-input">
+          <input id="chat-input" type="text" placeholder="Type a message..." />
+          <button onclick="sendMessage()" class="btn primary">Send</button>
+        </div>
+      </div>
     </div>
 
     <script src="/socket.io/socket.io.js"></script>
