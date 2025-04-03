@@ -51,10 +51,16 @@
           >
             Mute Audio
           </button>
+          <button id="toggle-chat" onclick="toggleChat()" class="btn primary">
+            Chat
+          </button>
         </div>
         <div id="video-grid" class="video-grid"></div>
-        <div class="chat-container">
-          <h3>Chat</h3>
+        <div id="chat-popup" class="chat-popup" style="display: none">
+          <div class="chat-header">
+            <h3>Chat</h3>
+            <button onclick="toggleChat()" class="btn close-btn">×</button>
+          </div>
           <div id="chat-messages" class="chat-messages"></div>
           <div class="chat-input">
             <input

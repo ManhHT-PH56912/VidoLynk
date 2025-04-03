@@ -21,11 +21,9 @@ async function startMedia() {
     );
     const video = videoContainer.querySelector("video");
     video.srcObject = localStream;
-    video.muted = true; // Tắt tiếng local để tránh echo
+    video.muted = true;
     video.play();
     document.getElementById("video-grid").appendChild(videoContainer);
-
-    // Phân tích âm thanh local
     setupAudioAnalyser(socket.id, localStream);
   } catch (err) {
     console.error("Error accessing media devices:", err);
@@ -74,7 +72,6 @@ function setupAudioAnalyser(userId, stream) {
     const waveform = document.querySelector(`#video-${userId} .waveform`);
     if (waveform) {
       if (average > 10) {
-        // Ngưỡng để kích hoạt sóng âm
         waveform.classList.add("active");
       } else {
         waveform.classList.remove("active");
@@ -142,6 +139,12 @@ function toggleAudio() {
   document.getElementById("toggle-audio").textContent = audioEnabled
     ? "Mute Audio"
     : "Unmute Audio";
+}
+
+function toggleChat() {
+  const chatPopup = document.getElementById("chat-popup");
+  chatPopup.style.display =
+    chatPopup.style.display === "none" ? "flex" : "none";
 }
 
 function sendMessage() {
